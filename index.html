@@ -92,7 +92,9 @@
 <script>
 (() => {
   const tg = window.Telegram && window.Telegram.WebApp;
-  const inTelegram = !!(tg && tg.initData);
+  // При открытии из reply-кнопки Telegram не передаёт initData, поэтому
+  // определяем Telegram по платформе (вне Telegram она "unknown").
+  const inTelegram = !!(tg && tg.platform && tg.platform !== "unknown");
   if (tg) { tg.ready(); tg.expand(); }
 
   const q = new URLSearchParams(location.search);
