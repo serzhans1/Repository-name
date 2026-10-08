@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Выбор столика</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script src="layout.js"></script>
+<style>
+  :root {
+    --bg: var(--tg-theme-bg-color, #ffffff);
+    --text: var(--tg-theme-text-color, #1c1c1e);
+    --hint: var(--tg-theme-hint-color, #8e8e93);
+    --accent: var(--tg-theme-button-color, #2481cc);
+    --accent-text: var(--tg-theme-button-text-color, #ffffff);
+    --card: var(--tg-theme-secondary-bg-color, #f2f2f7);
+    --free: #2e9e57;
+    --free-bg: rgba(46, 158, 87, .14);
+    --busy: #9a9aa0;
+    --busy-bg: rgba(154, 154, 160, .22);
+    --wall: color-mix(in srgb, var(--text) 55%, transparent);
+    --decor: color-mix(in srgb, var(--text) 9%, transparent);
+    --window: #5aa9e6;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  .wrap { max-width: 480px; margin: 0 auto; padding: 14px 16px 120px; }
+  h1 { font-size: 20px; font-weight: 600; margin: 0 0 2px; }
+  .sub { color: var(--hint); margin: 0 0 14px; }
+  .tabs { display: flex; gap: 4px; padding: 4px; background: var(--card); border-radius: 12px; margin-bottom: 12px; }
+  .tab { flex: 1; border: 0; background: transparent; color: var(--text); font: inherit; padding: 8px 6px;
+    border-radius: 9px; cursor: pointer; line-height: 1.2; }
+  .tab small { display: block; color: var(--hint); font-size: 12px; margin-top: 2px; }
+  .tab.on { background: var(--bg); box-shadow: 0 1px 3px rgba(0,0,0,.12); font-weight: 600; }
+  .tab.on small { font-weight: 400; }
+  .plan { background: var(--card); border-radius: 16px; padding: 6px; }
+  svg { display: block; width: 100%; height: auto; user-select: none; }
+  svg text { font-family: inherit; }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 12px 2px 0; color: var(--hint); font-size: 13px; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .legend i { width: 14px; height: 14px; border-radius: 4px; display: inline-block; }
+  .card { margin-top: 14px; background: var(--card); border-radius: 14px; padding: 14px 16px; min-height: 64px; }
+  .card .t { font-size: 17px; font-weight: 600; }
+  .card .d { color: var(--hint); margin-top: 2px; }
+  .card.empty { color: var(--hint); display: flex; align-items: center; }
+  .fallback { position: fixed; left: 16px; right: 16px; bottom: 16px; max-width: 448px; margin: 0 auto;
+    border: 0; border-radius: 12px; padding: 15px; font: 600 16px/1 inherit; font-family: inherit;
+    background: var(--accent); color: var(--accent-text); display: none; }
+  .fallback:disabled { opacity: .45; }
+
+  .tbl { cursor: pointer; }
+  .tbl .top { stroke-width: 1.6; transition: fill .15s, stroke .15s; }
+  .tbl .chair { transition: fill .15s; }
+  .tbl text { pointer-events: none; text-anchor: middle; dominant-baseline: central; }
+  .tbl .num { font-size: 13px; font-weight: 700; }
+  .tbl .seats { font-size: 9px; }
+  .free .top { fill: var(--free-bg); stroke: var(--free); }
+  .free .chair { fill: var(--free); opacity: .55; }
+  .free .num, .free .seats { fill: var(--free); }
+  .busy { cursor: not-allowed; }
+  .busy .top { fill: var(--busy-bg); stroke: var(--busy); }
+  .busy .chair { fill: var(--busy); opacity: .45; }
+  .busy .num, .busy .seats { fill: var(--busy); }
+  .small { cursor: not-allowed; opacity: .5; }
+  .small .top { fill: none; stroke: var(--busy); stroke-dasharray: 4 3; }
+  .small .chair { fill: var(--busy); opacity: .4; }
+  .small .num, .small .seats { fill: var(--busy); }
+  .sel .top { fill: var(--accent); stroke: var(--accent); }
+  .sel .chair { fill: var(--accent); opacity: 1; }
+  .sel .num, .sel .seats { fill: var(--accent-text); }
+  @keyframes pop { 0% { transform: scale(1); } 50% { transform: scale(1.08); } 100% { transform: scale(1); } }
+  .sel { animation: pop .25s ease; transform-box: fill-box; transform-origin: center; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Выберите столик</h1>
+  <p class="sub" id="sub"></p>
+  <div class="tabs" id="tabs"></div>
+  <div class="plan"><svg id="plan" xmlns="http://www.w3.org/2000/svg"></svg></div>
+  <div class="legend">
+    <span><i style="background:var(--free-bg);border:1.5px solid var(--free)"></i>Свободен</span>
+    <span><i style="background:var(--accent)"></i>Ваш выбор</span>
+    <span><i style="background:var(--busy-bg);border:1.5px solid var(--busy)"></i>Занят</span>
+    <span><i style="border:1.5px dashed var(--busy)"></i>Мало мест</span>
+  </div>
+  <div class="card empty" id="card">Нажмите на свободный стол на схеме</div>
+</div>
+<button class="fallback" id="fallback" disabled>Выберите стол</button>
+
+<script>
+(() => {
+  const tg = window.Telegram && window.Telegram.WebApp;
+  const inTelegram = !!(tg && tg.initData);
+  if (tg) { tg.ready(); tg.expand(); }
+
+  const q = new URLSearchParams(location.search);
+  const date = q.get("date") || new Date().toISOString().slice(0, 10);
+  const guests = Math.max(1, parseInt(q.get("guests") || "2", 10));
+  const busy = new Set((q.get("busy") || "").split(",").filter(Boolean).map(Number));
+
+  const WD = ["воскресенье", "понедельник", "вторник", "среду", "четверг", "пятницу", "субботу"];
+  const MON = ["января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа",
+               "сентября", "октября", "ноября", "декабря"];
+  const d = new Date(date + "T12:00:00");
+  const plural = (n, a, b, c) => (n % 10 === 1 && n % 100 !== 11) ? a
+    : (n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20)) ? b : c;
+  const dateText = `${d.getDate()} ${MON[d.getMonth()]}`;
+  document.getElementById("sub").textContent =
+    `На ${WD[d.getDay()]}, ${dateText} · ${guests} ${plural(guests, "гость", "гостя", "гостей")}`;
+
+  const floors = window.LAYOUT.floors;
+  const status = t => busy.has(t.number) ? "busy" : (t.seats < guests ? "small" : "free");
+  const freeCount = f => f.tables.filter(t => status(t) === "free").length;
+
+  let floorIdx = Math.max(0, floors.findIndex(f => freeCount(f) > 0));
+  let selected = null;
+
+  const NS = "http://www.w3.org/2000/svg";
+  const el = (tag, attrs, parent) => {
+    const n = document.createElementNS(NS, tag);
+    for (const k in attrs) n.setAttribute(k, attrs[k]);
+    if (parent) parent.appendChild(n);
+    return n;
+  };
+  const txt = (s, attrs, parent) => { const n = el("text", attrs, parent); n.textContent = s; return n; };
+
+  function chairs(t) {
+    const out = [], gap = 10, n = t.seats;
+    if (t.shape === "circle") {
+      const cx = t.x + t.w / 2, cy = t.y + t.h / 2, r = t.w / 2 + gap;
+      for (let i = 0; i < n; i++) {
+        const a = Math.PI * (i * 2 / n) + (n === 2 ? 0 : -Math.PI / 2);
+        out.push([cx + r * Math.cos(a), cy + r * Math.sin(a)]);
+      }
+      return out;
+    }
+    const horizontal = t.w >= t.h, a = Math.ceil(n / 2), b = n - a;
+    const side = (k, fixed, start, len, isX) => {
+      for (let i = 0; i < k; i++) {
+        const p = start + len * (i + 1) / (k + 1);
+        out.push(isX ? [p, fixed] : [fixed, p]);
+      }
+    };
+    if (horizontal) { side(a, t.y - gap, t.x, t.w, true); side(b, t.y + t.h + gap, t.x, t.w, true); }
+    else { side(a, t.x - gap, t.y, t.h, false); side(b, t.x + t.w + gap, t.y, t.h, false); }
+    return out;
+  }
+
+  function drawDecor(svg, f) {
+    for (const o of f.decor) {
+      if (o.type === "block") {
+        el("rect", { x: o.x, y: o.y, width: o.w, height: o.h, rx: 8, fill: "var(--decor)" }, svg);
+        txt(o.label, { x: o.x + o.w / 2, y: o.y + o.h / 2, "text-anchor": "middle",
+          "dominant-baseline": "central", "font-size": 13, fill: "var(--hint)" }, svg);
+      } else if (o.type === "zone") {
+        el("rect", { x: o.x, y: o.y, width: o.w, height: o.h, rx: 12, fill: "none",
+          stroke: "var(--hint)", "stroke-dasharray": "6 4", "stroke-width": 1.2 }, svg);
+        txt(o.label, { x: o.x + o.w / 2, y: o.y + 18, "text-anchor": "middle",
+          "font-size": 12, fill: "var(--hint)" }, svg);
+      } else if (o.type === "window") {
+        el("line", { x1: o.x, y1: o.y, x2: o.x + o.w, y2: o.y + o.h, stroke: "var(--window)",
+          "stroke-width": 5, "stroke-linecap": "round", "stroke-dasharray": "40 8" }, svg);
+      } else if (o.type === "entrance") {
+        el("line", { x1: o.x, y1: o.y, x2: o.x + o.w, y2: o.y, stroke: "var(--card)", "stroke-width": 6 }, svg);
+        txt("▲ " + o.label, { x: o.x + o.w / 2, y: o.y - 12, "text-anchor": "middle",
+          "font-size": 12, fill: "var(--hint)" }, svg);
+      }
+    }
+  }
+
+  function drawTable(svg, t) {
+    const st = selected && selected.number === t.number ? "sel" : status(t);
+    const g = el("g", { class: "tbl " + st, "data-n": t.number }, svg);
+    el("rect", { x: t.x - 14, y: t.y - 14, width: t.w + 28, height: t.h + 28, fill: "transparent" }, g);
+    for (const [cx, cy] of chairs(t)) el("circle", { class: "chair", cx, cy, r: 6 }, g);
+    if (t.shape === "circle")
+      el("circle", { class: "top", cx: t.x + t.w / 2, cy: t.y + t.h / 2, r: t.w / 2 }, g);
+    else
+      el("rect", { class: "top", x: t.x, y: t.y, width: t.w, height: t.h, rx: 8 }, g);
+    const cx = t.x + t.w / 2, cy = t.y + t.h / 2;
+    const big = t.h >= 44;
+    txt(String(t.number), { class: "num", x: cx, y: big ? cy - 6 : cy }, g);
+    if (big) txt(st === "busy" ? "занят" : `${t.seats} мест${t.seats < 5 ? "а" : ""}`, { class: "seats", x: cx, y: cy + 9 }, g);
+    g.addEventListener("click", () => pick(t));
+  }
+
+  function render() {
+    const tabs = document.getElementById("tabs");
+    tabs.innerHTML = "";
+    floors.forEach((f, i) => {
+      const b = document.createElement("button");
+      b.className = "tab" + (i === floorIdx ? " on" : "");
+      const n = freeCount(f);
+      b.innerHTML = `${f.title}<small>${n ? n + " " + plural(n, "свободный", "свободных", "свободных") : "нет мест"}</small>`;
+      b.onclick = () => { floorIdx = i; haptic("selection"); render(); };
+      tabs.appendChild(b);
+    });
+
+    const f = floors[floorIdx];
+    const svg = document.getElementById("plan");
+    svg.innerHTML = "";
+    svg.setAttribute("viewBox", `0 0 ${f.width} ${f.height}`);
+    el("rect", { x: 10, y: 10, width: f.width - 20, height: f.height - 20, rx: 14,
+      fill: "var(--bg)", stroke: "var(--wall)", "stroke-width": 2.5 }, svg);
+    drawDecor(svg, f);
+    f.tables.forEach(t => drawTable(svg, t));
+  }
+
+  function haptic(kind, arg) {
+    try {
+      if (!tg || !tg.HapticFeedback) return;
+      if (kind === "selection") tg.HapticFeedback.selectionChanged();
+      else if (kind === "error") tg.HapticFeedback.notificationOccurred("error");
+      else tg.HapticFeedback.impactOccurred(arg || "light");
+    } catch (e) {}
+  }
+
+  function pick(t) {
+    const st = status(t);
+    const card = document.getElementById("card");
+    if (st !== "free") {
+      haptic("error");
+      card.className = "card empty";
+      card.textContent = st === "busy"
+        ? `Стол №${t.number} на эту дату уже занят — выберите другой`
+        : `Стол №${t.number} рассчитан на ${t.seats} ${plural(t.seats, "гостя", "гостей", "гостей")} — для вашей компании мало мест`;
+      return;
+    }
+    selected = t;
+    haptic("impact", "medium");
+    const floor = floors[floorIdx];
+    card.className = "card";
+    card.innerHTML = `<div class="t">Стол №${t.number}</div>
+      <div class="d">${floor.title} · ${t.zone} · до ${t.seats} ${plural(t.seats, "гостя", "гостей", "гостей")}</div>`;
+    const label = `Забронировать стол №${t.number}`;
+    if (inTelegram) {
+      tg.MainButton.setText(label);
+      tg.MainButton.show();
+    } else {
+      const fb = document.getElementById("fallback");
+      fb.textContent = label;
+      fb.disabled = false;
+    }
+    render();
+  }
+
+  function submit() {
+    if (!selected) return;
+    const payload = JSON.stringify({ table: selected.number, date, guests });
+    if (inTelegram) { tg.MainButton.showProgress(); tg.sendData(payload); }
+    else alert("Демо-режим вне Telegram. Будет отправлено боту:\n" + payload);
+  }
+
+  if (inTelegram) tg.MainButton.onClick(submit);
+  else {
+    const fb = document.getElementById("fallback");
+    fb.style.display = "block";
+    fb.onclick = submit;
+  }
+  render();
+})();
+</script>
+</body>
+</html>
